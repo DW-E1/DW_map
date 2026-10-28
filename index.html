@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1530">
-<title>서울3 거래처 지도</title>
+<title>DW MAP</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -28,7 +28,7 @@ aside{background:var(--panel);display:flex;flex-direction:column;min-height:0;ov
 .scroll{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column}
 
 /* ---------- 히어로 ---------- */
-.hero{position:relative;flex:none;height:212px;overflow:hidden;border-radius:0 0 28px 28px;
+.hero{position:relative;flex:none;height:150px;overflow:hidden;border-radius:0 0 28px 28px;
   background:linear-gradient(180deg,#2b2366 0%,#6b3b8f 34%,#c8577a 62%,#ff8a5b 82%,#ffc480 100%)}
 .hero .orb{position:absolute;left:50%;bottom:44px;width:96px;height:96px;margin-left:-48px;border-radius:50%;
   background:radial-gradient(circle at 50% 50%,#fff3df 0 58%,rgba(255,236,200,.0) 72%);box-shadow:0 0 60px 20px rgba(255,214,160,.45)}
@@ -49,8 +49,9 @@ aside{background:var(--panel);display:flex;flex-direction:column;min-height:0;ov
   radial-gradient(1px 1px at 36% 54%,#cdd8ff,transparent),radial-gradient(1px 1px at 64% 44%,#fff,transparent),
   radial-gradient(1px 1px at 8% 64%,#fff,transparent),radial-gradient(1.5px 1.5px at 52% 60%,#fff,transparent)}
 .hero.night .stars{opacity:.9}
+.hero.night .txt{right:100px}
 .hero .txt{position:absolute;left:22px;top:22px;right:22px;z-index:2}
-.hero h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.3px;text-shadow:0 2px 10px rgba(0,0,0,.25)}
+.hero h1{margin:0;font-size:28px;font-weight:900;letter-spacing:1px;text-shadow:0 2px 10px rgba(0,0,0,.25)}
 .hero .date{margin-top:4px;font-size:13px;opacity:.9}
 .hero .glass{position:absolute;left:22px;right:22px;bottom:16px;z-index:2;background:rgba(255,255,255,.82);color:#1d2340;border-radius:14px;padding:10px 14px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 24px rgba(20,10,60,.25)}
@@ -211,6 +212,7 @@ select option,select optgroup{background:#16244a;color:var(--text)}
 /* ---------- 모달·토스트·진행 ---------- */
 .modal{position:fixed;inset:0;background:rgba(3,8,25,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(3px)}
 .modal.show{display:flex}
+#mKey{z-index:110}
 .box{background:var(--panel-2);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);width:min(560px,100%);max-height:90vh;overflow:auto;padding:22px}
 .box.wide{width:min(880px,100%)}
 .box h2{margin:0 0 6px;font-size:19px;font-weight:800}
@@ -245,7 +247,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
   .app{grid-template-columns:1fr;grid-template-rows:1fr auto}
   aside{position:fixed;inset:0 0 calc(64px + env(safe-area-inset-bottom)) 0;z-index:26;transform:translateY(102%);transition:transform .25s;border:0}
   aside.open{transform:none}
-  .hero{height:190px}
+  .hero{height:130px}
   .mapwrap{grid-row:1}
   .detail{top:auto;bottom:0;right:0;left:0;width:auto;max-height:62%;border-radius:22px 22px 0 0}
   .topbar .hide-m{display:none}
@@ -266,8 +268,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
       <div class="hero" id="hero">
         <div class="stars"></div><div class="orb"></div>
         <div class="mt b"></div><div class="mt f"></div><div class="water"></div>
-        <div class="txt"><h1 id="greet">안녕하세요</h1><div class="date" id="today"></div></div>
-        <div class="glass"><div class="gt">거래처 현황</div><div class="gs" id="dataInfo"></div></div>
+        <div class="txt"><h1>DW MAP</h1><div class="date" id="today"></div></div>
       </div>
 
       <div class="sec">
@@ -286,6 +287,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 
       <div class="sec">
         <h2><span class="grow" id="lgTitle"></span>
+          <button class="btn sm" id="btnAddRep">＋ 인원</button>
           <button class="btn sm" id="lgAll">전체 켜기/끄기</button></h2>
         <div class="legend" id="legend"></div>
       </div>
@@ -341,21 +343,21 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 <div class="modal" id="mKey"><div class="box">
   <h2>설정</h2>
   <div class="err" id="keyErr"></div>
-  <h3 style="font-size:14px;margin:10px 0 4px">팀 공유</h3>
-  <p style="margin:0 0 6px">이관 내역은 팀 전체가 같이 봅니다. 이관을 저장하려면 팀 비밀번호와 이름이 필요합니다. 보기만 할 때는 필요 없습니다.</p>
-  <div class="row"><label>내 이름</label><input id="nameIn" placeholder="예: 최진혁" maxlength="20" autocomplete="name"></div>
-  <div class="row"><label>팀 비밀번호</label><input id="pwIn" type="password" placeholder="사무소에서 정한 비밀번호" autocomplete="current-password"></div>
-  <h3 style="font-size:14px;margin:16px 0 4px">카카오맵 키</h3>
-  <p style="margin:0 0 6px">보통 config.js에 넣어 두므로 비워 둬도 됩니다. config.js가 없을 때만 여기에 넣으세요.</p>
-  <div class="row"><label>JavaScript 키</label><input id="keyIn" placeholder="32자리 키" autocomplete="off"></div>
-  <h3 style="font-size:14px;margin:16px 0 4px">좌표 파일</h3>
-  <p style="margin:0 0 6px">공유 저장소에 연결되면 위치가 자동으로 공유됩니다. 연결이 안 될 때만 파일로 주고받으세요.</p>
-  <div class="foot" style="justify-content:flex-start;margin-top:0">
-    <button class="btn" id="geoOut">좌표 내보내기</button>
-    <button class="btn" id="geoIn">좌표 불러오기</button>
-    <input type="file" id="geoFile" accept=".json" hidden>
+  <div id="pwSec">
+    <p style="margin:0 0 6px">이관과 인원 추가는 팀 전체에 반영되므로 <b>팀 비밀번호</b>가 필요합니다. 한 번 넣으면 이 브라우저에 저장됩니다. 보기만 할 때는 필요 없습니다.</p>
+    <div class="row"><label>팀 비밀번호</label><input id="pwIn" type="password" placeholder="사무소에서 정한 비밀번호" autocomplete="current-password"></div>
   </div>
-  <div class="foot"><button class="btn" id="keyCancel">닫기</button><button class="btn primary" id="keySave">저장</button></div>
+  <div class="foot"><button class="btn" id="pwClear">저장된 비밀번호 지우기</button><span class="spacer"></span><button class="btn" id="keyCancel">닫기</button><button class="btn primary" id="keySave">저장</button></div>
+</div></div>
+
+<div class="modal" id="mRep"><div class="box">
+  <h2>인원 추가</h2>
+  <p>8월 데이터 이후 새로 온 담당자를 추가합니다. 추가한 인원에게 거래처를 이관할 수 있고, 팀 전체에 반영됩니다.</p>
+  <div class="row"><label>이름</label><input id="repName" maxlength="20" placeholder="예: 홍길동"></div>
+  <div class="row"><label>사무소</label><select class="sel" id="repOffice" style="flex:1"></select></div>
+  <div class="row"><label>사번 (선택)</label><input id="repId" maxlength="24" placeholder="모르면 비워 두세요"></div>
+  <div class="err" id="repErr"></div>
+  <div class="foot"><button class="btn" id="repCancel">취소</button><button class="btn primary" id="repSave">추가</button></div>
 </div></div>
 
 <div class="modal" id="mLog"><div class="box wide">
@@ -462,7 +464,6 @@ function visibleRows(){
 }
 
 /* ---------- 상단 선택 ---------- */
-$('dataInfo').textContent = `${uniq(REPS.map(r => r.div)).join('·')} · ${D.month} 로컬실적 · ${ACC.length.toLocaleString()}곳`;
 function fillHier(){
   const divs = uniq(REPS.map(r => r.div)).sort(ko);
   $('fDiv').innerHTML = `<option value="">전체 사업부</option>` + divs.map(d => `<option ${d === S.div ? 'selected' : ''}>${esc(d)}</option>`).join('');
@@ -500,12 +501,16 @@ function loadKakao(key){
     document.head.appendChild(s);
   });
 }
+function mapNotice(msg){
+  $('progTxt').textContent = msg; $('prog').querySelector('.bar').style.display = 'none';
+  $('prog').classList.add('show'); $('prog').style.maxWidth = '440px'; $('prog').style.lineHeight = '1.6';
+}
 async function init(){
+  syncReps(LS.get(LSK + 'reps', {})); saveXF(); fillHier();
   setSync('busy', '공유 저장소 확인 중');
   const [shared] = await Promise.all([pullShared(true), pullGeo()]);
-  if (shared && !cred().pw) toast('이관 내역은 팀과 공유됩니다. 이관하려면 ⚙에서 팀 비밀번호와 이름을 넣어 주세요.');
   const key = getKey();
-  if (!key){ openSet('지도를 쓰려면 카카오 JavaScript 키를 넣어 주세요.'); renderSide(visibleRows()); return; }
+  if (!key){ mapNotice('지도 키가 없습니다. 저장소의 config.js에 카카오 JavaScript 키가 들어 있는지 확인해 주세요.'); renderSide(visibleRows()); return; }
   try{
     await loadKakao(key);
     map = new kakao.maps.Map($('map'), { center: new kakao.maps.LatLng(37.55, 127.0), level: 8 });
@@ -515,7 +520,7 @@ async function init(){
     clusterer = new kakao.maps.MarkerClusterer({ averageCenter: true, minLevel: 6, gridSize: 50 });
     window.addEventListener('resize', () => map.relayout());
   }catch(e){
-    openSet('지도를 불러오지 못했습니다 (' + e.message + '). 키, 등록한 도메인, 카카오맵 사용 설정을 확인해 주세요. PC에서 파일을 바로 열면 작동하지 않고 등록한 웹 주소에서 열어야 합니다.');
+    mapNotice('지도를 불러오지 못했습니다 (' + e.message + '). config.js의 카카오 키, 카카오에 등록한 도메인, 카카오맵 사용 설정을 확인해 주세요.');
     renderSide(visibleRows()); return;
   }
   ACC.forEach(a => { const c = geoCache[ckey(a)]; if (c){ [a.lat, a.lng, a.geo] = c; } });
@@ -696,7 +701,7 @@ function renderSide(vis){
     }
     const sub = m === 'rep' && !S.office ? ` <span class="sub">${esc(REP[k].office)}</span>` : '';
     return `<div class="lg ${S.hidden.has(k) ? 'off' : ''}" data-g="${esc(k)}">
-      <span class="sw" style="background:${gColor(k)}">${esc(String(gName(k)).slice(0, m === 'office' ? 2 : 1))}</span><span class="nm">${esc(gName(k))}${sub}</span>
+      <span class="sw" style="background:${gColor(k)}">${esc(String(gName(k)).slice(0, m === 'office' ? 2 : 1))}</span><span class="nm">${esc(gName(k))}${m === 'rep' && REP[k].extra ? ' <span class="sub" style="color:var(--accent-2)">추가</span>' : ''}${sub}</span>
       <span class="ct">${right}</span>${btns}</div>`;
   }).join('') || '<div class="more">해당 거래처 없음</div>';
 
@@ -866,14 +871,19 @@ function showGroup(type, key){
     <div class="dh"><button class="x" id="dClose" aria-label="닫기">×</button>
       <div class="t">${type === 'rep' ? esc(r.name) + ' 담당' : esc(key) + ' 사무소'}</div>
       <div class="chips">
-        ${type === 'rep' ? `<span class="chip">${esc(r.div)} · ${esc(r.office)}</span><span class="chip">사번 ${esc(r.id)}</span>` : `<span class="chip">담당자 ${ids.length}명</span>`}
+        ${type === 'rep' ? `<span class="chip">${esc(r.div)} · ${esc(r.office)}</span>${r.extra ? `<span class="chip" style="color:var(--accent-2)">추가 인원</span>` : ''}${/^N/.test(r.id) && r.extra ? '' : `<span class="chip">사번 ${esc(r.id)}</span>`}` : `<span class="chip">담당자 ${ids.length}명</span>`}
         <span class="chip">거래처 ${accs.length}곳</span>
       </div></div>
     <div class="db">
+      ${r && r.extra ? `
+      <div class="sub">이관받은 거래처 기준 (${D.month} 실적)</div>
+      <div class="big">${won(t.fin)}원</div>
+      ${growthCard(t.base, t.fin, t.base > 0 ? (t.fin >= t.base ? 'up' : 'down') : 'none', null)}
+      <div class="links" style="padding:12px 0 0"><button id="dRepDel" style="color:var(--danger)">이 인원 삭제</button></div>` : `
       <div class="sub">${D.month} 최종실적 (50% 기준점 적용 · 담당자별 시트)</div>
       <div class="big">${won(t.fin0)}원</div>
-      ${growthCard(t.base0, t.fin0, t.base0 > 0 ? (t.fin0 >= t.base0 ? 'up' : 'down') : 'none', null)}
-      ${t.adj ? `<div class="note" style="margin-top:10px">이관 반영 시: 기준점 ${won(t.base)} · 실적 ${won(t.fin)} → <b class="${t.diff >= 0 ? 'gp' : 'gm'}">${sign(t.diff)} (${fmtPct(pct(t.diff, t.base))})</b></div>` : ''}
+      ${growthCard(t.base0, t.fin0, t.base0 > 0 ? (t.fin0 >= t.base0 ? 'up' : 'down') : 'none', null)}`}
+      ${t.adj && !(r && r.extra) ? `<div class="note" style="margin-top:10px">이관 반영 시: 기준점 ${won(t.base)} · 실적 ${won(t.fin)} → <b class="${t.diff >= 0 ? 'gp' : 'gm'}">${sign(t.diff)} (${fmtPct(pct(t.diff, t.base))})</b></div>` : ''}
       ${brk.length ? `<h4>실적 구성</h4><div class="kv">${brk.map(([c, v]) => `<div class="k">${esc(c)}</div><div class="v n">${won(v)}</div>`).join('')}</div>` : ''}
       <h4>거래처별 기준점 대비</h4>
       <div class="gcnt">${GORDER.filter(k => cnt[k].n).map(k => `<button class="gc" data-gs="${k}"><span class="sw" style="background:${GS[k].color}"></span>${GS[k].label}<b>${cnt[k].n}</b><span class="${cnt[k].d >= 0 ? 'gp' : 'gm'}">${cnt[k].d >= 0 ? '+' : '-'}${man(Math.abs(cnt[k].d))}</span></button>`).join('')}</div>
@@ -884,6 +894,11 @@ function showGroup(type, key){
   $('detail').classList.add('show');
   if (innerWidth <= 760){ $('side').classList.remove('open'); document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'map')); }
   $('dClose').onclick = closeDetail;
+  if ($('dRepDel')) $('dRepDel').onclick = async () => {
+    if (accs.length){ toast(`${r.name}님에게 이관된 거래처 ${accs.length}곳을 먼저 되돌리거나 다른 사람에게 옮겨 주세요`); return; }
+    if (!confirm(`${r.name}님을 인원 목록에서 삭제할까요?`)) return;
+    if (await commitOps({}, { [r.id]: null })){ closeDetail(); if (S.rep === r.id){ S.rep = ''; fillHier(); } refresh(false); toast('삭제했습니다'); }
+  };
   $('detail').querySelectorAll('.glr').forEach(el => el.onclick = () => select(el.dataset.k, true));
   $('detail').querySelectorAll('.gc').forEach(el => el.onclick = () => {
     if (type === 'rep'){ S.office = r.office; S.rep = key; } else { S.office = key; S.rep = ''; }
@@ -933,10 +948,41 @@ function renderXbar(){
   const pref = S.office || (sel[0] && REP[sel[0].rep].office);
   const order = Object.keys(byO).sort((x, y) => (y === pref) - (x === pref) || ko(x, y));
   $('xTo').innerHTML = `<option value="">받을 담당자 선택</option>` + order.map(o => `<optgroup label="${esc(o)}">` +
-    byO[o].sort((a, b) => ko(a.name, b.name)).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('') + '</optgroup>').join('');
-  if (cur) $('xTo').value = cur;
+    byO[o].sort((a, b) => ko(a.name, b.name)).map(r => `<option value="${r.id}">${esc(r.name)}${r.extra ? ' (추가)' : ''}</option>`).join('') + '</optgroup>').join('')
+    + `<option value="__new">＋ 새 인원 추가…</option>`;
+  if (cur && cur !== '__new') $('xTo').value = cur;
 }
 $('xClear').onclick = () => { S.picked.clear(); refresh(false); };
+$('xTo').onchange = e => { if (e.target.value === '__new'){ e.target.value = ''; openAddRep(true); } };
+
+/* ---------- 인원 추가 ---------- */
+let repForXfer = false;
+function openAddRep(forXfer){
+  repForXfer = !!forXfer;
+  const sel = [...S.picked].map(k => BYKEY[k]);
+  const def = S.office || (sel[0] && REP[sel[0].rep].office) || OFFICES[0];
+  $('repOffice').innerHTML = OFFICES.map(o => `<option ${o === def ? 'selected' : ''}>${esc(o)}</option>`).join('');
+  $('repName').value = ''; $('repId').value = ''; $('repErr').textContent = '';
+  $('mRep').classList.add('show'); setTimeout(() => $('repName').focus(), 50);
+}
+$('repCancel').onclick = () => $('mRep').classList.remove('show');
+$('repSave').onclick = async () => {
+  const name = $('repName').value.trim(), office = $('repOffice').value, rid = $('repId').value.trim();
+  if (!name){ $('repErr').textContent = '이름을 넣어 주세요.'; return; }
+  if (rid && !/^[A-Za-z0-9]{3,24}$/.test(rid)){ $('repErr').textContent = '사번은 영문·숫자 3자리 이상입니다.'; return; }
+  if (rid && REP[rid]){ $('repErr').textContent = `이미 있는 사번입니다 (${REP[rid].name}).`; return; }
+  if (REPS.some(r => r.name === name && r.office === office) && !confirm(`${office}에 이미 ${name}님이 있습니다. 그래도 추가할까요?`)) return;
+  const id = rid || ('N' + Date.now().toString(36).toUpperCase());
+  const div = (REPS.find(r => r.office === office) || {}).div || '';
+  $('repSave').disabled = true;
+  const ok = await commitOps({}, { [id]: { name, office, div } });
+  $('repSave').disabled = false;
+  if (!ok) return;
+  $('mRep').classList.remove('show');
+  toast(`${name}님(${office})을 추가했습니다`);
+  if (repForXfer && S.picked.size){ renderXbar(); $('xTo').value = id; }
+};
+$('btnAddRep').onclick = () => openAddRep(false);
 let lastUndo = null;
 $('xGo').onclick = async () => {
   const to = $('xTo').value;
@@ -973,7 +1019,7 @@ $('toastUndo').onclick = async () => {
 
 /* ---------- 공유 저장 (Vercel 서버 함수 → GitHub data/*.json) ---------- */
 const SHARE = { on: false, last: 0, log: [] };
-const cred = () => ({ pw: LS.get('teamPw', ''), name: LS.get('teamName', '') });
+const cred = () => ({ pw: LS.get('teamPw', '') });
 async function api(method, body, q){
   const r = await fetch('api/xfer' + (q || ''), { method, cache: 'no-store',
     headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -987,12 +1033,30 @@ function setSync(state, tip){
   b.textContent = state === 'on' ? '● 공유' : state === 'busy' ? '◌ 저장 중' : '○ 내 브라우저';
   b.title = tip || (state === 'on' ? '이관 내역이 팀 전체에 공유됩니다. 누르면 최신 내용을 불러옵니다.' : '공유 저장소에 연결되지 않아 이 브라우저에만 저장됩니다. 누르면 다시 연결합니다.');
 }
+/* 추가 인원: 공유 저장소(xfer.json의 reps) 또는 이 브라우저 */
+let EXTRA = LS.get(LSK + 'reps', {});
+function syncReps(extra){
+  EXTRA = extra || {};
+  for (let i = REPS.length - 1; i >= 0; i--) if (REPS[i].extra){ delete REP[REPS[i].id]; REPS.splice(i, 1); }
+  for (const [id, v] of Object.entries(EXTRA)){
+    if (REP[id]) continue;
+    const div = v.div || (REPS.find(r => r.office === v.office) || {}).div || '';
+    const r = { id, name: v.name, office: v.office, div, stat: null, extra: true, at: v.at };
+    REPS.push(r); REP[id] = r;
+  }
+  recolor();
+}
+function recolor(){
+  OFFICES.forEach(o => REPS.filter(r => r.office === o).sort((a, b) => (!!a.extra - !!b.extra) || ko(a.name, b.name)).forEach((r, i) => RCOL[r.id] = PAL[i % PAL.length]));
+}
 async function pullShared(silent){
   try{
     const j = await api('GET', null, '?file=xfer');
     SHARE.on = true; SHARE.last = Date.now();
-    XF = (j.data && j.data.items) || {}; SHARE.log = (j.data && j.data.log) || [];
-    saveXF(); setSync('on');
+    const d = j.data || {};
+    syncReps(d.reps || {}); LS.set(LSK + 'reps', EXTRA);
+    XF = d.items || {}; SHARE.log = d.log || [];
+    saveXF(); fillHier(); setSync('on');
     return true;
   }catch(e){
     SHARE.on = false; setSync('off', '공유 저장소 연결 실패: ' + e.message + ' (이 브라우저에만 저장됩니다)');
@@ -1003,26 +1067,38 @@ async function pullShared(silent){
 async function pullGeo(){
   try{ const j = await api('GET', null, '?file=geo'); Object.assign(geoCache, j.data || {}); LS.set(LSK + 'geo', geoCache); }catch(e){}
 }
-async function commitOps(ops){
-  const prev = { ...XF };
-  for (const k in ops){ if (ops[k]) XF[k] = { ...ops[k], by: cred().name }; else delete XF[k]; }
-  saveXF(); refresh(false);
-  if (!SHARE.on) return true;
-  const c = cred();
-  if (!c.pw || !c.name){
-    XF = prev; saveXF(); refresh(false);
-    openSet('이관을 팀과 공유하려면 아래에 팀 비밀번호와 이름을 넣어 주세요.'); return false;
+function needPw(msg){
+  return new Promise(res => {
+    pendingAfterPw = () => res(true);
+    const cancel = $('keyCancel').onclick;
+    $('keyCancel').onclick = () => { $('keyCancel').onclick = cancel; pendingAfterPw = null; $('mKey').classList.remove('show'); res(false); };
+    openSet(msg);
+  });
+}
+/* 이관(ops)·인원(reps) 저장: 공유 모드면 서버에, 아니면 이 브라우저에 */
+async function commitOps(ops, reps){
+  ops = ops || {}; reps = reps || {};
+  if (!SHARE.on){
+    for (const k in ops){ if (ops[k]) XF[k] = ops[k]; else delete XF[k]; }
+    const ex = { ...EXTRA }; for (const id in reps){ if (reps[id]) ex[id] = { ...reps[id], at: new Date().toISOString().slice(0, 10) }; else delete ex[id]; }
+    syncReps(ex); LS.set(LSK + 'reps', EXTRA); saveXF(); fillHier(); refresh(false);
+    return true;
   }
+  if (!cred().pw && !(await needPw('이관과 인원 추가는 팀 전체에 반영됩니다. 팀 비밀번호를 넣어 주세요.'))) return false;
   setSync('busy');
   try{
-    const j = await api('POST', { file: 'xfer', ops, password: c.pw, by: c.name });
-    XF = j.data.items || {}; SHARE.log = j.data.log || []; SHARE.last = Date.now();
-    saveXF(); refresh(false); setSync('on');
+    const j = await api('POST', { file: 'xfer', ops, reps, password: cred().pw });
+    const d = j.data || {};
+    syncReps(d.reps || {}); LS.set(LSK + 'reps', EXTRA);
+    XF = d.items || {}; SHARE.log = d.log || []; SHARE.last = Date.now();
+    saveXF(); fillHier(); refresh(false); setSync('on');
     return true;
   }catch(e){
-    XF = prev; saveXF(); refresh(false); setSync('on');
-    if (e.status === 401){ LS.set('teamPw', ''); openSet('팀 비밀번호가 맞지 않습니다. 다시 넣어 주세요.'); }
-    else toast('저장하지 못해 되돌렸습니다: ' + e.message);
+    setSync('on');
+    if (e.status === 401){
+      LS.set('teamPw', '');
+      if (await needPw('팀 비밀번호가 맞지 않습니다. 다시 넣어 주세요.')) return commitOps(ops, reps);
+    } else toast('저장하지 못했습니다: ' + e.message);
     return false;
   }
 }
@@ -1097,8 +1173,8 @@ function openLog(){
       const b = before[r.id] || z, f = after[r.id] || z, d = f.v - b.v;
       return `<tr><td>${esc(r.office)}</td><td>${esc(r.name)}</td><td class="n">${b.n} → ${f.n}</td><td class="n">${won(b.v)}</td><td class="n">${won(f.v)}</td><td class="n" style="color:${d >= 0 ? 'var(--ok)' : 'var(--danger)'}">${d >= 0 ? '+' : ''}${won(d)}</td></tr>`;
     }).join('') + '</table>' : '<div class="more">아직 이관한 거래처가 없습니다.</div>';
-  $('logList').innerHTML = items.length ? `<table class="t"><tr><th>거래처</th><th>원 담당</th><th>새 담당</th><th class="n">${D.month} 실적</th><th>이관일</th><th>작업자</th><th></th></tr>` +
-    items.sort((a, b) => ko(REP[a.rep0].name, REP[b.rep0].name)).map(a => `<tr><td>${esc(a.name)}</td><td>${esc(REP[a.rep0].name)} <span class="sub">${esc(REP[a.rep0].office)}</span></td><td>${esc(REP[a.rep].name)} <span class="sub">${esc(REP[a.rep].office)}</span></td><td class="n">${won(a.perf[0])}</td><td>${esc(XF[a.key].at)}</td><td>${esc(XF[a.key].by || '-')}</td><td><button class="btn sm" data-undo="${esc(a.key)}">되돌리기</button></td></tr>`).join('') + '</table>' : '';
+  $('logList').innerHTML = items.length ? `<table class="t"><tr><th>거래처</th><th>원 담당</th><th>새 담당</th><th class="n">${D.month} 실적</th><th>이관일</th><th></th></tr>` +
+    items.sort((a, b) => ko(REP[a.rep0].name, REP[b.rep0].name)).map(a => `<tr><td>${esc(a.name)}</td><td>${esc(REP[a.rep0].name)} <span class="sub">${esc(REP[a.rep0].office)}</span></td><td>${esc(REP[a.rep].name)} <span class="sub">${esc(REP[a.rep].office)}</span></td><td class="n">${won(a.perf[0])}</td><td>${esc(XF[a.key].at)}</td><td><button class="btn sm" data-undo="${esc(a.key)}">되돌리기</button></td></tr>`).join('') + '</table>' : '';
   $('mLog').classList.add('show');
 }
 $('btnLog').onclick = openLog;
@@ -1113,8 +1189,8 @@ $('logReset').onclick = async () => {
 function exportXlsx(){
   const { items, before, after } = logData();
   const w = XLSX.utils.book_new();
-  const sh1 = [['거래처코드', '시퀀스', '거래처명', '사업자번호', '주소', '원 사무소', '원 담당 사번', '원 담당', '새 사무소', '새 담당 사번', '새 담당', D.month + ' 최종실적', '이관일', '작업자']]
-    .concat(items.map(a => [a.code, a.seq, a.name, a.biz, a.addr, REP[a.rep0].office, REP[a.rep0].id, REP[a.rep0].name, REP[a.rep].office, REP[a.rep].id, REP[a.rep].name, a.perf[0], XF[a.key].at, XF[a.key].by || '']));
+  const sh1 = [['거래처코드', '시퀀스', '거래처명', '사업자번호', '주소', '원 사무소', '원 담당 사번', '원 담당', '새 사무소', '새 담당 사번', '새 담당', D.month + ' 최종실적', '이관일']]
+    .concat(items.map(a => [a.code, a.seq, a.name, a.biz, a.addr, REP[a.rep0].office, REP[a.rep0].id, REP[a.rep0].name, REP[a.rep].office, REP[a.rep].id, REP[a.rep].name, a.perf[0], XF[a.key].at]));
   const z = { n: 0, v: 0 };
   const sh2 = [['사업부', '사무소', '사번', '담당자', '변경 전 거래처수', '변경 전 실적', '변경 후 거래처수', '변경 후 실적', '실적 증감']]
     .concat(REPS.slice().sort((a, b) => ko(a.office, b.office) || ko(a.name, b.name)).map(r => { const b = before[r.id] || z, f = after[r.id] || z; return [r.div, r.office, r.id, r.name, b.n, Math.round(b.v), f.n, Math.round(f.v), Math.round(f.v - b.v)]; }));
@@ -1132,34 +1208,20 @@ $('logExport').onclick = $('btnExport').onclick = exportXlsx;
 
 /* ---------- 설정 ---------- */
 function openSet(msg){
-  $('keyIn').value = getKey() || ''; $('pwIn').value = cred().pw; $('nameIn').value = cred().name;
+  $('pwIn').value = cred().pw;
   $('keyErr').textContent = msg || ''; $('mKey').classList.add('show');
+  setTimeout(() => $('pwIn').focus(), 50);
 }
 $('btnSet').onclick = () => openSet();
 $('keyCancel').onclick = () => $('mKey').classList.remove('show');
 $('keySave').onclick = () => {
-  LS.set('teamName', $('nameIn').value.trim().slice(0, 20)); LS.set('teamPw', $('pwIn').value);
-  const k = $('keyIn').value.trim();
-  if (k && k !== getKey()){
-    if (!/^[0-9a-f]{32}$/i.test(k)){ $('keyErr').textContent = 'JavaScript 키는 32자리 영문·숫자입니다.'; return; }
-    LS.set('kakaoKey', k); location.reload(); return;
-  }
-  if (!getKey()){ $('keyErr').textContent = '카카오 JavaScript 키를 넣어 주세요.'; return; }
-  $('mKey').classList.remove('show'); toast('저장했습니다');
+  LS.set('teamPw', $('pwIn').value);
+  $('mKey').classList.remove('show');
+  if (pendingAfterPw){ const f = pendingAfterPw; pendingAfterPw = null; f(); } else toast('저장했습니다');
 };
-$('geoOut').onclick = () => {
-  const blob = new Blob([JSON.stringify(geoCache)], { type: 'application/json' });
-  const u = URL.createObjectURL(blob), l = document.createElement('a');
-  l.href = u; l.download = '거래처좌표.json'; l.click(); setTimeout(() => URL.revokeObjectURL(u), 1000);
-};
-$('geoIn').onclick = () => $('geoFile').click();
-$('geoFile').onchange = e => {
-  const f = e.target.files[0]; if (!f) return;
-  f.text().then(t => {
-    try{ Object.assign(geoCache, JSON.parse(t)); LS.set(LSK + 'geo', geoCache); location.reload(); }
-    catch(err){ $('keyErr').textContent = '좌표 파일을 읽지 못했습니다.'; }
-  });
-};
+$('pwIn').onkeydown = e => { if (e.key === 'Enter') $('keySave').click(); };
+$('pwClear').onclick = () => { LS.set('teamPw', ''); $('pwIn').value = ''; toast('저장된 비밀번호를 지웠습니다'); };
+let pendingAfterPw = null;
 
 init();
 </script>
@@ -1170,12 +1232,7 @@ init();
   const now = new Date(), h = now.getHours();
   const night = h >= 18 || h < 6;
   $('hero').classList.toggle('night', night);
-  $('greet').textContent = h < 6 ? '늦은 밤이에요' : h < 11 ? '좋은 아침이에요' : h < 18 ? '오늘도 화이팅' : '수고 많으셨어요';
-  $('today').textContent = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
-  const total = ACC.reduce((s, a) => s + a.perf[0], 0);
-  const tg = groupGrowth(REPS.map(r => r.id)), tp = pct(tg.fin0 - tg.base0, tg.base0);
-  const nUp = REPS.filter(r => r.stat && r.stat[1] >= r.stat[0]).length;
-  $('dataInfo').innerHTML = `${esc(D.month)} 로컬실적 ${(tg.fin0 / 1e8).toFixed(1)}억 · 기준점 대비 <b class="${tp >= 0 ? 'gp' : 'gm'}">${fmtPct(tp)}</b><br>담당자 ${REPS.length}명 중 성장 ${nUp}명 · 거래처 ${ACC.length.toLocaleString()}곳`;
+  $('today').textContent = now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + ` · ${D.month.replace(/^\d{4}년\s*/, '')} 실적 기준`;
 
   let nightMap = LS.get('nightMap', true);
   const applyNight = () => { $('map').classList.toggle('night', nightMap); $('btnNight').textContent = nightMap ? '🌙' : '☀️'; };
