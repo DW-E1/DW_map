@@ -162,7 +162,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
           <select class="sel" id="colorBy" style="padding:2px 4px;font-size:12px">
             <option value="auto">색: 자동</option><option value="office">색: 사무소</option><option value="rep">색: 담당자</option>
           </select>
-          <button class="btn sm" id="lgAll">전체</button></h3>
+          <button class="btn sm" id="lgAll">전체 켜기/끄기</button></h3>
         <div class="legend" id="legend"></div>
       </div>
       <div class="sec opts">
@@ -200,9 +200,9 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
   <p>카카오맵 JavaScript 키는 처음 한 번만 넣으면 이 브라우저에 저장됩니다.</p>
   <ol>
     <li><code>developers.kakao.com</code> → 내 애플리케이션 → 애플리케이션 추가</li>
-    <li>앱 설정 → 플랫폼 → Web → 이 페이지 주소(예: <code>https://아이디.github.io</code>) 등록</li>
-    <li>카카오맵 사용 설정 <b>ON</b> (제품 설정 메뉴)</li>
-    <li>앱 키 → <b>JavaScript 키</b> 복사</li>
+    <li>제품 설정 → 카카오맵 → 사용 설정 <b>ON</b></li>
+    <li>플랫폼 키 → JavaScript 키 → <b>JavaScript SDK 도메인</b>에 이 페이지 주소(예: <code>https://xxx.vercel.app</code>) 등록</li>
+    <li><b>JavaScript 키</b> 복사</li>
   </ol>
   <div class="row"><label>JavaScript 키</label><input id="keyIn" placeholder="32자리 키" autocomplete="off"></div>
   <div class="err" id="keyErr"></div>
@@ -232,9 +232,9 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 
 <div class="modal" id="mFail"><div class="box">
   <h2>위치를 찾지 못한 거래처</h2>
-  <p>회전관리장 주소로도, 거래처명으로도 찾지 못했습니다.</p>
+  <p id="failInfo"></p>
   <div class="tw" id="failList"></div>
-  <div class="foot"><button class="btn" id="failClose">닫기</button></div>
+  <div class="foot"><button class="btn" id="failClose">닫기</button><button class="btn primary" id="failRetry">다시 찾기</button></div>
 </div></div>
 
 <script>
@@ -277,13 +277,11 @@ const RCOL = {};
 OFFICES.forEach(o => REPS.filter(r => r.office === o).sort((a, b) => ko(a.name, b.name)).forEach((r, i) => RCOL[r.id] = PAL[i % PAL.length]));
 const brandTotal = BR.map(() => 0); ACC.forEach(a => a.br.forEach(([b, v]) => brandTotal[b] += v));
 
-const saved = LS.get(LSK + 'view', {});
 const S = {
-  div: saved.div || '', office: saved.office || '', rep: saved.rep || '', brand: -1, colorBy: 'auto',
-  hidden: new Set(), q: '', hull: true, label: true, size: true, cluster: false,
+  div: '', office: '', rep: '', brand: -1, colorBy: 'auto',
+  hidden: new Set(OFFICES), q: '', hull: true, label: true, size: true, cluster: false,   // 첫 화면: 전부 해제
   selected: null, picked: new Set(), selMode: false
 };
-if (S.rep && !REP[S.rep]) S.rep = '';
 const mode = () => S.colorBy === 'auto' ? (S.office || S.rep ? 'rep' : 'office') : S.colorBy;
 const gk = a => mode() === 'rep' ? a.rep : offOf(a);
 const gName = g => mode() === 'rep' ? REP[g].name : g;
@@ -309,7 +307,6 @@ function fillHier(){
   const byO = {}; reps.forEach(r => (byO[r.office] = byO[r.office] || []).push(r));
   $('fRep').innerHTML = `<option value="">전체 담당자</option>` + Object.keys(byO).sort(ko).map(o =>
     `<optgroup label="${esc(o)}">` + byO[o].sort((a, b) => ko(a.name, b.name)).map(r => `<option value="${r.id}" ${r.id === S.rep ? 'selected' : ''}>${esc(r.name)}</option>`).join('') + '</optgroup>').join('');
-  LS.set(LSK + 'view', { div: S.div, office: S.office, rep: S.rep });
 }
 $('fBrand').innerHTML = `<option value="-1">전체 품목</option>` +
   BR.map((b, i) => [b, i]).sort((x, y) => brandTotal[y[1]] - brandTotal[x[1]]).map(([b, i]) => `<option value="${i}">${esc(b)}</option>`).join('');
@@ -352,7 +349,6 @@ async function init(){
   ACC.forEach(a => { const c = geoCache[ckey(a)]; if (c){ [a.lat, a.lng, a.geo] = c; } });
   ACC.forEach(a => a.lat != null && makeOverlay(a));
   refresh(true);
-  await geocodeAll();
 }
 
 /* ---------- 주소 → 좌표 ---------- */
@@ -363,36 +359,71 @@ function cleanAddr(s){
   if (road) return road[1];
   return s.replace(/,.*$/, '').replace(/\s\S*\d+층.*$/, '').trim();
 }
-function geocodeOne(a){
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 카카오 검색 호출: 호출이 몰려 ERROR가 나면 잠시 쉬었다가 최대 4번 다시 시도
+function svc(call){
   return new Promise(res => {
-    const OK = kakao.maps.services.Status.OK;
-    const done = (lat, lng, how) => { a.lat = +lat; a.lng = +lng; a.geo = how; geoCache[ckey(a)] = [a.lat, a.lng, how]; makeOverlay(a); res(); };
-    const byPlace = () => {
-      const q = a.name.replace(/\(.*?\)/g, '').split(',')[0].trim() + (a.addr ? ' ' + a.addr.split(/\s+/).slice(0, 2).join(' ') : '');
-      places.keywordSearch(q, (d, st) => { if (st === OK && d.length) done(d[0].y, d[0].x, 'place'); else { a.geo = 'fail'; res(); } });
-    };
-    if (!a.addr) return byPlace();
-    geocoder.addressSearch(cleanAddr(a.addr), (d, st) => {
-      if (st === OK && d.length) return done(d[0].y, d[0].x, 'addr');
-      geocoder.addressSearch(a.addr.replace(/,.*$/, ''), (d2, st2) => {
-        if (st2 === OK && d2.length) done(d2[0].y, d2[0].x, 'addr'); else byPlace();
-      });
+    let tries = 0;
+    const go = () => call((d, st) => {
+      if (st === kakao.maps.services.Status.ERROR && tries < 4){ tries++; setTimeout(go, 500 * tries); }
+      else res({ d, st });
     });
+    go();
   });
 }
-async function geocodeAll(){
-  const todo = ACC.filter(a => a.lat == null);
-  if (!todo.length) return;
-  $('prog').classList.add('show');
-  let n = 0, i = 0;
-  const upd = () => { $('progTxt').textContent = `처음 한 번 위치 찾는 중… ${n.toLocaleString()} / ${todo.length.toLocaleString()}`; $('progBar').style.width = (n / todo.length * 100) + '%'; };
-  upd();
-  const worker = async () => { while (i < todo.length){ await geocodeOne(todo[i++]); n++; if (n % 20 === 0) upd(); if (n % 400 === 0){ LS.set(LSK + 'geo', geoCache); refresh(false); } } };
-  await Promise.all([worker(), worker(), worker(), worker()]);
-  LS.set(LSK + 'geo', geoCache);
-  $('prog').classList.remove('show');
-  refresh(false);
+function nameQuery(a){
+  const nm = a.name.replace(/\(.*?\)/g, '').replace(/-?폐업|-?휴업/g, '').split(',')[0].trim();
+  return nm + (a.addr ? ' ' + a.addr.split(/\s+/).slice(0, 2).join(' ') : '');
 }
+async function geocodeOne(a){
+  const ST = kakao.maps.services.Status;
+  let err = false;
+  const pick = ({ d, st }) => { if (st === ST.ERROR) err = true; return st === ST.OK && d && d.length ? d[0] : null; };
+  const addr = q => svc(cb => geocoder.addressSearch(q, cb)).then(pick);
+  const kw = q => svc(cb => places.keywordSearch(q, cb)).then(pick);
+  let r = null, how = 'addr';
+  if (a.addr){
+    const c = cleanAddr(a.addr);
+    r = await addr(c);
+    if (!r){ const c2 = a.addr.replace(/\(.*?\)/g, ' ').replace(/,.*$/, '').trim(); if (c2 !== c) r = await addr(c2); }
+  }
+  if (!r){ how = 'place'; r = await kw(nameQuery(a)); }
+  if (!r && a.addr){ how = 'kwaddr'; r = await kw(cleanAddr(a.addr)); }
+  a.tried = true;
+  if (r){ a.lat = +r.y; a.lng = +r.x; a.geo = how; geoCache[ckey(a)] = [a.lat, a.lng, how]; makeOverlay(a); }
+  else a.geo = err ? 'err' : 'fail';      // err: 호출 제한 등 일시 오류 → 다음에 다시 시도
+}
+/* 선택한 범위의 거래처만 위치를 찾습니다 */
+let geoQ = [], geoBusy = false, geoDone = 0, geoTotal = 0;
+function ensureGeo(rows){
+  if (!map) return;
+  const add = rows.filter(a => a.lat == null && !a.tried && !a.queued);
+  if (!add.length) return;
+  add.forEach(a => a.queued = true);
+  geoQ.push(...add); geoTotal += add.length;
+  if (!geoBusy) runGeo();
+}
+async function runGeo(){
+  geoBusy = true;
+  $('prog').classList.add('show');
+  const upd = () => { $('progTxt').textContent = `위치 찾는 중… ${geoDone.toLocaleString()} / ${geoTotal.toLocaleString()}`; $('progBar').style.width = (geoDone / Math.max(1, geoTotal) * 100) + '%'; };
+  upd();
+  const worker = async () => {
+    while (geoQ.length){
+      const a = geoQ.shift(); a.queued = false;
+      await geocodeOne(a); geoDone++;
+      if (geoDone % 10 === 0) upd();
+      if (geoDone % 60 === 0){ LS.set(LSK + 'geo', geoCache); refresh(false, true); }
+      await sleep(60);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  LS.set(LSK + 'geo', geoCache);
+  geoBusy = false; geoDone = 0; geoTotal = 0;
+  $('prog').classList.remove('show');
+  refresh(fitAfterGeo, true); fitAfterGeo = false;
+}
+let fitAfterGeo = false;
 
 /* ---------- 지도 그리기 ---------- */
 function makeOverlay(a){
@@ -404,8 +435,13 @@ function makeOverlay(a){
   a._ov = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(a.lat, a.lng), content: el, xAnchor: .5, yAnchor: .5, clickable: true, zIndex: 3 });
 }
 let VIS = [];
-function refresh(fit){
+function refresh(fit, fromGeo){
   const vis = VIS = visibleRows();
+  if (!fromGeo){
+    const before = geoQ.length;
+    ensureGeo(vis);
+    if (fit && geoQ.length > before) fitAfterGeo = true;
+  }
   if (map){
     const visMap = vis.filter(a => a._ov);
     const vals = visMap.map(a => Math.max(0, val(a))).sort((x, y) => x - y);
@@ -483,6 +519,11 @@ function renderSide(vis){
   }).join('') || '<div class="more">해당 거래처 없음</div>';
 
   // 목록
+  if (!vis.length && keys.length && keys.every(k => S.hidden.has(k))){
+    $('listInfo').textContent = '';
+    $('list').innerHTML = `<div class="more" style="padding:24px 12px;text-align:center;line-height:1.7">위 목록에서 볼 ${m === 'rep' ? '담당자' : '사무소'}를 눌러 주세요.<br>사무소 옆 › 를 누르면 그 사무소만 열립니다.</div>`;
+    return;
+  }
   const sorted = vis.slice().sort((x, y) => val(y) - val(x));
   const sum = vis.reduce((s, a) => s + val(a), 0);
   $('listInfo').textContent = `${vis.length.toLocaleString()}곳 · ${S.brand < 0 ? '실적' : BR[S.brand]} ${man(sum)}`;
@@ -491,19 +532,24 @@ function renderSide(vis){
     <input type="checkbox" class="pkc" ${S.picked.has(a.key) ? 'checked' : ''} title="이관 대상으로 선택">
     <span class="sw" style="background:${gColor(gk(a))}"></span>
     <div class="bd"><div class="t">${esc(a.name)}</div>
-      <div class="s">${esc(REP[a.rep].name)} · ${esc(REP[a.rep].office)}${a.rep !== a.rep0 ? ` <span class="xtag">← ${esc(REP[a.rep0].name)}</span>` : ''}${a.geo === 'fail' ? ' · <span style="color:var(--danger)">위치 없음</span>' : ''}</div></div>
+      <div class="s">${esc(REP[a.rep].name)} · ${esc(REP[a.rep].office)}${a.rep !== a.rep0 ? ` <span class="xtag">← ${esc(REP[a.rep0].name)}</span>` : ''}${a.geo === 'fail' || a.geo === 'err' ? ' · <span style="color:var(--danger)">위치 없음</span>' : ''}</div></div>
     <div class="v">${man(val(a))}</div></div>`).join('')
     + (sorted.length > LIM ? `<div class="more">실적 상위 ${LIM}곳만 표시 — 검색이나 담당자로 좁혀 보세요</div>` : '');
-  const fail = vis.filter(a => a.geo === 'fail').length;
+  const fail = vis.filter(a => a.geo === 'fail' || a.geo === 'err').length;
   if (fail) $('listInfo').innerHTML += ` · <a href="#" id="failLink" style="color:var(--danger)">위치 실패 ${fail}</a>`;
 }
 $('legend').onclick = e => {
   const go = e.target.closest('.go');
   if (go){ S.office = go.dataset.o; S.rep = ''; S.hidden.clear(); fillHier(); refresh(true); return; }
   const el = e.target.closest('.lg'); if (!el) return;
-  const g = el.dataset.g; S.hidden.has(g) ? S.hidden.delete(g) : S.hidden.add(g); refresh(false);
+  const g = el.dataset.g, on = S.hidden.has(g);
+  on ? S.hidden.delete(g) : S.hidden.add(g); refresh(on);
 };
-$('lgAll').onclick = () => { S.hidden.clear(); refresh(true); };
+$('lgAll').onclick = () => {
+  const keys = uniq(ACC.filter(inScope).map(gk));
+  if (keys.every(k => !S.hidden.has(k))){ keys.forEach(k => S.hidden.add(k)); refresh(false); }
+  else { S.hidden.clear(); refresh(true); }
+};
 $('list').onclick = e => {
   if (e.target.id === 'failLink'){ e.preventDefault(); return; }
   const el = e.target.closest('.it'); if (!el) return;
@@ -550,7 +596,9 @@ function select(key, pan){
     <div class="db">
       ${a.rep !== a.rep0 ? `<div class="note">이관됨: ${esc(r0.name)}(${esc(r0.office)}) → ${esc(r.name)}(${esc(r.office)})</div>` : ''}
       ${a.geo === 'place' ? `<div class="note">주소로 찾지 못해 거래처명으로 위치를 추정했습니다.</div>` : ''}
-      ${a.geo === 'fail' ? `<div class="note">위치를 찾지 못했습니다.</div>` : ''}
+      ${a.geo === 'kwaddr' ? `<div class="note">주소 검색으로 찾은 위치입니다. 핀 위치를 확인해 주세요.</div>` : ''}
+      ${a.geo === 'fail' ? `<div class="note">주소·거래처명으로 위치를 찾지 못했습니다.</div>` : ''}
+      ${a.geo === 'err' ? `<div class="note">카카오 검색이 일시적으로 응답하지 않았습니다. 위치 실패 목록에서 '다시 찾기'를 눌러 주세요.</div>` : ''}
       <div class="sub">${D.month} 최종실적 (50% 품목 적용)</div>
       <div class="big">${won(a.perf[0])}원</div>
       ${perfRows.length ? `<h4>실적 구성</h4><div class="kv">${perfRows.map(([c, v]) => `<div class="k">${esc(c)}</div><div class="v n">${won(v)}</div>`).join('')}</div>` : ''}
@@ -577,12 +625,20 @@ function closeDetail(){
   document.querySelectorAll('.it.on').forEach(e => e.classList.remove('on'));
 }
 function showFails(){
-  const f = VIS.filter(a => a.geo === 'fail');
-  $('failList').innerHTML = `<table class="t"><tr><th>거래처</th><th>담당</th><th>주소</th></tr>` +
-    f.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(REP[a.rep].name)}</td><td>${esc(a.addr || '주소 없음')}</td></tr>`).join('') + '</table>';
+  const f = VIS.filter(a => a.geo === 'fail' || a.geo === 'err');
+  const ne = f.filter(a => a.geo === 'err').length;
+  $('failInfo').textContent = ne
+    ? `${f.length}곳 중 ${ne}곳은 카카오 검색 호출이 몰려 일시적으로 실패한 것입니다. '다시 찾기'를 누르면 대부분 찾아집니다.`
+    : '회전관리장 주소로도, 거래처명으로도 찾지 못했습니다. 주소가 바뀌었거나 폐업한 곳일 수 있습니다.';
+  $('failList').innerHTML = `<table class="t"><tr><th>거래처</th><th>담당</th><th>사유</th><th>주소</th></tr>` +
+    f.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(REP[a.rep].name)}</td><td>${a.geo === 'err' ? '일시 오류' : '검색 결과 없음'}</td><td>${esc(a.addr || '주소 없음')}</td></tr>`).join('') + '</table>';
   $('mFail').classList.add('show');
 }
 $('failClose').onclick = () => $('mFail').classList.remove('show');
+$('failRetry').onclick = () => {
+  VIS.filter(a => a.geo === 'fail' || a.geo === 'err').forEach(a => { a.tried = false; a.geo = ''; });
+  $('mFail').classList.remove('show'); refresh(false);
+};
 
 /* ---------- 이관 선택 ---------- */
 function togglePick(key, on){
@@ -728,7 +784,7 @@ function exportXlsx(){
 $('logExport').onclick = $('btnExport').onclick = exportXlsx;
 
 /* ---------- 설정 ---------- */
-function openSet(msg){ $('keyIn').value = LS.get('kakaoKey', '') || ''; $('keyErr').textContent = msg || ''; $('mKey').classList.add('show'); }
+function openSet(msg){ $('keyIn').value = getKey() || ''; $('keyErr').textContent = msg || ''; $('mKey').classList.add('show'); }
 $('btnSet').onclick = () => openSet();
 $('keyCancel').onclick = () => $('mKey').classList.remove('show');
 $('keySave').onclick = () => {
