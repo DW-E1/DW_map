@@ -66,15 +66,16 @@ function sameText(a, b) {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
-const empty = file => file === 'xfer' ? { items: {}, reps: {}, log: [] } : {};
+const empty = file => file === 'xfer' ? { items: {}, reps: {}, removed: {}, log: [] } : {};
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
 
 function applyXfer(data, ops, reps) {
-  data.items = data.items || {}; data.reps = data.reps || {}; data.log = data.log || [];
+  data.items = data.items || {}; data.reps = data.reps || {}; data.removed = data.removed || {}; data.log = data.log || [];
   const now = new Date().toISOString(), by = '';
   let n = 0;
-  for (const [id, v] of Object.entries(reps)) {           // 인원 추가 (이관보다 먼저)
+  for (const [id, v] of Object.entries(reps)) {           // 인원 추가·복구 (이관보다 먼저)
     if (v === null) continue;
+    if (v.restore){ if (data.removed[id]){ delete data.removed[id]; data.log.push({ rep: id, restore: true, ts: now }); n++; } continue; }
     data.reps[id] = { ...v, at: now.slice(0, 10) }; data.log.push({ rep: id, name: v.name, ts: now }); n++;
   }
   for (const [k, v] of Object.entries(ops)) {
@@ -88,9 +89,12 @@ function applyXfer(data, ops, reps) {
     data.log.push({ k, to: v.to, ts: now }); n++;
   }
   for (const [id, v] of Object.entries(reps)) {           // 인원 삭제 (이관 처리 뒤)
-    if (v !== null || !data.reps[id]) continue;
-    if (Object.values(data.items).some(x => x.to === id)) throw httpErr(409, '이 인원에게 이관된 거래처가 있어 삭제할 수 없습니다. 먼저 되돌려 주세요');
-    delete data.reps[id]; data.log.push({ rep: id, del: true, ts: now }); n++;
+    if (v !== null) continue;
+    if (Object.values(data.items).some(x => x.to === id)) throw httpErr(409, '이 인원에게 이관된 거래처가 있어 삭제할 수 없습니다. 먼저 다른 사람에게 넘겨 주세요');
+    if (data.reps[id]) delete data.reps[id];               // 추가했던 인원은 완전히 삭제
+    else if (!data.removed[id]) data.removed[id] = { at: now.slice(0, 10) };   // 기존 인원은 삭제 표시(복구 가능)
+    else continue;
+    data.log.push({ rep: id, del: true, ts: now }); n++;
   }
   if (data.log.length > 2000) data.log = data.log.slice(-2000);
   return n;
@@ -108,6 +112,7 @@ function validateReps(reps) {
   for (const [id, v] of Object.entries(reps)) {
     if (!/^[A-Za-z0-9]{3,24}$/.test(id)) throw httpErr(400, '잘못된 사번입니다');
     if (v === null) { out[id] = null; continue; }
+    if (v && v.restore === true) { out[id] = { restore: true }; continue; }
     const name = clean(v && v.name, 20), office = clean(v && v.office, 30), div = clean(v && v.div, 30);
     if (!name || !office) throw httpErr(400, '이름과 사무소를 넣어 주세요');
     out[id] = { name, office, div };
