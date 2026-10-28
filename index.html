@@ -169,6 +169,9 @@ select option,select optgroup{background:#16244a;color:var(--text)}
 .gbtn{background:var(--glass);border:1px solid rgba(255,255,255,.1);color:var(--text);border-radius:14px;padding:9px 13px;font-weight:700;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:var(--shadow);white-space:nowrap}
 .gbtn:hover{background:rgba(30,45,90,.9)}
 .gbtn.on{background:#fff;color:#16244a}
+#btnSync{font-size:12px}
+#btnSync[data-state=on]{color:var(--ok)}
+#btnSync[data-state=off]{color:var(--sub)}
 .hint{background:var(--glass);color:var(--text);border-radius:12px;padding:8px 12px;font-size:12px;box-shadow:var(--shadow);backdrop-filter:blur(12px)}
 #selLayer{position:absolute;inset:0;z-index:11;display:none;cursor:crosshair;touch-action:none}
 #selLayer.show{display:block}
@@ -308,6 +311,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
       <button class="gbtn" id="btnSelMode">▢ 이관할 거래처 선택</button>
       <span class="hint" id="selHint" style="display:none">드래그: 영역 선택 · 클릭: 하나씩 · 휠: 확대/축소</span>
       <span class="grow"></span>
+      <button class="gbtn" id="btnSync" data-state="busy">◌ 연결 중</button>
       <button class="gbtn" id="btnNight" title="야간 지도">🌙</button>
       <button class="gbtn hide-m" id="btnLog">이관 내역<span class="badge" id="logN" style="display:none"></span></button>
       <button class="gbtn hide-m" id="btnExport">엑셀 저장</button>
@@ -336,22 +340,22 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 
 <div class="modal" id="mKey"><div class="box">
   <h2>설정</h2>
-  <p>카카오맵 JavaScript 키는 처음 한 번만 넣으면 이 브라우저에 저장됩니다.</p>
-  <ol>
-    <li><code>developers.kakao.com</code> → 내 애플리케이션 → 애플리케이션 추가</li>
-    <li>제품 설정 → 카카오맵 → 사용 설정 <b>ON</b></li>
-    <li>플랫폼 키 → JavaScript 키 → <b>JavaScript SDK 도메인</b>에 이 페이지 주소(예: <code>https://xxx.vercel.app</code>) 등록</li>
-    <li><b>JavaScript 키</b> 복사</li>
-  </ol>
-  <div class="row"><label>JavaScript 키</label><input id="keyIn" placeholder="32자리 키" autocomplete="off"></div>
   <div class="err" id="keyErr"></div>
-  <p style="margin-top:14px"><b style="color:var(--text)">좌표 공유</b> — 한 번 찾은 위치를 파일로 내보내 팀원에게 주면, 팀원은 불러오기만 하면 바로 지도가 뜹니다.</p>
+  <h3 style="font-size:14px;margin:10px 0 4px">팀 공유</h3>
+  <p style="margin:0 0 6px">이관 내역은 팀 전체가 같이 봅니다. 이관을 저장하려면 팀 비밀번호와 이름이 필요합니다. 보기만 할 때는 필요 없습니다.</p>
+  <div class="row"><label>내 이름</label><input id="nameIn" placeholder="예: 최진혁" maxlength="20" autocomplete="name"></div>
+  <div class="row"><label>팀 비밀번호</label><input id="pwIn" type="password" placeholder="사무소에서 정한 비밀번호" autocomplete="current-password"></div>
+  <h3 style="font-size:14px;margin:16px 0 4px">카카오맵 키</h3>
+  <p style="margin:0 0 6px">보통 config.js에 넣어 두므로 비워 둬도 됩니다. config.js가 없을 때만 여기에 넣으세요.</p>
+  <div class="row"><label>JavaScript 키</label><input id="keyIn" placeholder="32자리 키" autocomplete="off"></div>
+  <h3 style="font-size:14px;margin:16px 0 4px">좌표 파일</h3>
+  <p style="margin:0 0 6px">공유 저장소에 연결되면 위치가 자동으로 공유됩니다. 연결이 안 될 때만 파일로 주고받으세요.</p>
   <div class="foot" style="justify-content:flex-start;margin-top:0">
     <button class="btn" id="geoOut">좌표 내보내기</button>
     <button class="btn" id="geoIn">좌표 불러오기</button>
     <input type="file" id="geoFile" accept=".json" hidden>
   </div>
-  <div class="foot"><button class="btn" id="keyCancel">닫기</button><button class="btn primary" id="keySave">키 저장 후 새로고침</button></div>
+  <div class="foot"><button class="btn" id="keyCancel">닫기</button><button class="btn primary" id="keySave">저장</button></div>
 </div></div>
 
 <div class="modal" id="mLog"><div class="box wide">
@@ -497,6 +501,9 @@ function loadKakao(key){
   });
 }
 async function init(){
+  setSync('busy', '공유 저장소 확인 중');
+  const [shared] = await Promise.all([pullShared(true), pullGeo()]);
+  if (shared && !cred().pw) toast('이관 내역은 팀과 공유됩니다. 이관하려면 ⚙에서 팀 비밀번호와 이름을 넣어 주세요.');
   const key = getKey();
   if (!key){ openSet('지도를 쓰려면 카카오 JavaScript 키를 넣어 주세요.'); renderSide(visibleRows()); return; }
   try{
@@ -555,7 +562,7 @@ async function geocodeOne(a){
   if (!r){ how = 'place'; r = await kw(nameQuery(a)); }
   if (!r && a.addr){ how = 'kwaddr'; r = await kw(cleanAddr(a.addr)); }
   a.tried = true;
-  if (r){ a.lat = +r.y; a.lng = +r.x; a.geo = how; geoCache[ckey(a)] = [a.lat, a.lng, how]; makeOverlay(a); }
+  if (r){ a.lat = +r.y; a.lng = +r.x; a.geo = how; geoCache[ckey(a)] = [a.lat, a.lng, how]; geoNew[ckey(a)] = [a.lat, a.lng, how]; makeOverlay(a); }
   else a.geo = err ? 'err' : 'fail';      // err: 호출 제한 등 일시 오류 → 다음에 다시 시도
 }
 /* 선택한 범위의 거래처만 위치를 찾습니다 */
@@ -584,6 +591,7 @@ async function runGeo(){
   };
   await Promise.all([worker(), worker(), worker()]);
   LS.set(LSK + 'geo', geoCache);
+  pushGeo();
   geoBusy = false; geoDone = 0; geoTotal = 0;
   $('prog').classList.remove('show');
   refresh(fitAfterGeo, true); fitAfterGeo = false;
@@ -930,34 +938,105 @@ function renderXbar(){
 }
 $('xClear').onclick = () => { S.picked.clear(); refresh(false); };
 let lastUndo = null;
-$('xGo').onclick = () => {
+$('xGo').onclick = async () => {
   const to = $('xTo').value;
   if (!to){ $('xTo').focus(); return; }
   const today = new Date().toISOString().slice(0, 10);
-  const undo = {}; let n = 0;
+  const ops = {}, undo = {}; let n = 0;
   S.picked.forEach(k => {
     const a = BYKEY[k]; if (a.rep === to) return;
-    undo[k] = XF[k] ? { ...XF[k] } : null;
-    if (to === a.rep0) delete XF[k]; else XF[k] = { to, at: today };
+    undo[k] = XF[k] ? { to: XF[k].to, at: XF[k].at } : null;
+    ops[k] = to === a.rep0 ? null : { to, at: today };
     n++;
   });
-  saveXF(); S.picked.clear();
-  lastUndo = undo;
+  if (!n){ S.picked.clear(); refresh(false); return; }
+  $('xGo').disabled = true;
+  const ok = await commitOps(ops);
+  $('xGo').disabled = false;
+  if (!ok) return;
+  S.picked.clear(); lastUndo = undo;
   refresh(false);
   if (S.selected) select(S.selected, false);
-  toast(`${n}곳을 ${REP[to].name}(${REP[to].office})님에게 이관했습니다`);
+  toast(`${n}곳을 ${REP[to].name}(${REP[to].office})님에게 이관했습니다${SHARE.on ? ' · 공유 저장됨' : ''}`, true);
 };
 function saveXF(){ LS.set(LSK + 'xfer', XF); applyXF(); }
 let tT;
-function toast(msg){
-  $('toastTxt').textContent = msg; $('toast').classList.add('show');
+function toast(msg, undo){
+  $('toastTxt').textContent = msg; $('toastUndo').style.display = undo ? '' : 'none'; $('toast').classList.add('show');
   clearTimeout(tT); tT = setTimeout(() => $('toast').classList.remove('show'), 6000);
 }
-$('toastUndo').onclick = () => {
+$('toastUndo').onclick = async () => {
   if (!lastUndo) return;
-  for (const k in lastUndo){ if (lastUndo[k]) XF[k] = lastUndo[k]; else delete XF[k]; }
-  lastUndo = null; saveXF(); refresh(false); $('toast').classList.remove('show');
+  const u = lastUndo; lastUndo = null; $('toast').classList.remove('show');
+  if (await commitOps(u)) toast('되돌렸습니다');
 };
+
+/* ---------- 공유 저장 (Vercel 서버 함수 → GitHub data/*.json) ---------- */
+const SHARE = { on: false, last: 0, log: [] };
+const cred = () => ({ pw: LS.get('teamPw', ''), name: LS.get('teamName', '') });
+async function api(method, body, q){
+  const r = await fetch('api/xfer' + (q || ''), { method, cache: 'no-store',
+    headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  let j = {}; try{ j = await r.json(); }catch(e){}
+  if (!r.ok){ const e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  return j;
+}
+function setSync(state, tip){
+  const b = $('btnSync'); if (!b) return;
+  b.dataset.state = state;
+  b.textContent = state === 'on' ? '● 공유' : state === 'busy' ? '◌ 저장 중' : '○ 내 브라우저';
+  b.title = tip || (state === 'on' ? '이관 내역이 팀 전체에 공유됩니다. 누르면 최신 내용을 불러옵니다.' : '공유 저장소에 연결되지 않아 이 브라우저에만 저장됩니다. 누르면 다시 연결합니다.');
+}
+async function pullShared(silent){
+  try{
+    const j = await api('GET', null, '?file=xfer');
+    SHARE.on = true; SHARE.last = Date.now();
+    XF = (j.data && j.data.items) || {}; SHARE.log = (j.data && j.data.log) || [];
+    saveXF(); setSync('on');
+    return true;
+  }catch(e){
+    SHARE.on = false; setSync('off', '공유 저장소 연결 실패: ' + e.message + ' (이 브라우저에만 저장됩니다)');
+    if (!silent && e.status && e.status !== 404) toast('공유 저장소를 불러오지 못했습니다: ' + e.message);
+    return false;
+  }
+}
+async function pullGeo(){
+  try{ const j = await api('GET', null, '?file=geo'); Object.assign(geoCache, j.data || {}); LS.set(LSK + 'geo', geoCache); }catch(e){}
+}
+async function commitOps(ops){
+  const prev = { ...XF };
+  for (const k in ops){ if (ops[k]) XF[k] = { ...ops[k], by: cred().name }; else delete XF[k]; }
+  saveXF(); refresh(false);
+  if (!SHARE.on) return true;
+  const c = cred();
+  if (!c.pw || !c.name){
+    XF = prev; saveXF(); refresh(false);
+    openSet('이관을 팀과 공유하려면 아래에 팀 비밀번호와 이름을 넣어 주세요.'); return false;
+  }
+  setSync('busy');
+  try{
+    const j = await api('POST', { file: 'xfer', ops, password: c.pw, by: c.name });
+    XF = j.data.items || {}; SHARE.log = j.data.log || []; SHARE.last = Date.now();
+    saveXF(); refresh(false); setSync('on');
+    return true;
+  }catch(e){
+    XF = prev; saveXF(); refresh(false); setSync('on');
+    if (e.status === 401){ LS.set('teamPw', ''); openSet('팀 비밀번호가 맞지 않습니다. 다시 넣어 주세요.'); }
+    else toast('저장하지 못해 되돌렸습니다: ' + e.message);
+    return false;
+  }
+}
+let geoNew = {};
+async function pushGeo(){
+  if (!SHARE.on) return;
+  const ops = geoNew; geoNew = {};
+  if (!Object.keys(ops).length) return;
+  try{ await api('POST', { file: 'geo', ops }); }catch(e){ Object.assign(geoNew, ops); }
+}
+$('btnSync').onclick = async () => { setSync('busy'); if (await pullShared()){ refresh(false); toast('최신 이관 내역을 불러왔습니다'); } };
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && SHARE.on && Date.now() - SHARE.last > 60000){ if (await pullShared(true)) refresh(false); }
+});
 
 /* 지도 위 영역 선택 */
 $('btnSelMode').onclick = () => {
@@ -1018,23 +1097,24 @@ function openLog(){
       const b = before[r.id] || z, f = after[r.id] || z, d = f.v - b.v;
       return `<tr><td>${esc(r.office)}</td><td>${esc(r.name)}</td><td class="n">${b.n} → ${f.n}</td><td class="n">${won(b.v)}</td><td class="n">${won(f.v)}</td><td class="n" style="color:${d >= 0 ? 'var(--ok)' : 'var(--danger)'}">${d >= 0 ? '+' : ''}${won(d)}</td></tr>`;
     }).join('') + '</table>' : '<div class="more">아직 이관한 거래처가 없습니다.</div>';
-  $('logList').innerHTML = items.length ? `<table class="t"><tr><th>거래처</th><th>원 담당</th><th>새 담당</th><th class="n">${D.month} 실적</th><th>이관일</th><th></th></tr>` +
-    items.sort((a, b) => ko(REP[a.rep0].name, REP[b.rep0].name)).map(a => `<tr><td>${esc(a.name)}</td><td>${esc(REP[a.rep0].name)} <span class="sub">${esc(REP[a.rep0].office)}</span></td><td>${esc(REP[a.rep].name)} <span class="sub">${esc(REP[a.rep].office)}</span></td><td class="n">${won(a.perf[0])}</td><td>${esc(XF[a.key].at)}</td><td><button class="btn sm" data-undo="${esc(a.key)}">되돌리기</button></td></tr>`).join('') + '</table>' : '';
+  $('logList').innerHTML = items.length ? `<table class="t"><tr><th>거래처</th><th>원 담당</th><th>새 담당</th><th class="n">${D.month} 실적</th><th>이관일</th><th>작업자</th><th></th></tr>` +
+    items.sort((a, b) => ko(REP[a.rep0].name, REP[b.rep0].name)).map(a => `<tr><td>${esc(a.name)}</td><td>${esc(REP[a.rep0].name)} <span class="sub">${esc(REP[a.rep0].office)}</span></td><td>${esc(REP[a.rep].name)} <span class="sub">${esc(REP[a.rep].office)}</span></td><td class="n">${won(a.perf[0])}</td><td>${esc(XF[a.key].at)}</td><td>${esc(XF[a.key].by || '-')}</td><td><button class="btn sm" data-undo="${esc(a.key)}">되돌리기</button></td></tr>`).join('') + '</table>' : '';
   $('mLog').classList.add('show');
 }
 $('btnLog').onclick = openLog;
 $('logClose').onclick = () => $('mLog').classList.remove('show');
-$('logList').onclick = e => { const k = e.target.dataset.undo; if (!k) return; delete XF[k]; saveXF(); refresh(false); openLog(); };
-$('logReset').onclick = () => {
-  if (!Object.keys(XF).length) return;
-  if (!confirm('이관한 거래처를 모두 원래 담당자로 되돌릴까요?')) return;
-  XF = {}; saveXF(); refresh(false); openLog();
+$('logList').onclick = async e => { const k = e.target.dataset.undo; if (!k) return; e.target.disabled = true; await commitOps({ [k]: null }); openLog(); };
+$('logReset').onclick = async () => {
+  const keys = Object.keys(XF); if (!keys.length) return;
+  if (!confirm(`이관한 거래처 ${keys.length}곳을 모두 원래 담당자로 되돌릴까요?${SHARE.on ? '\n(팀 전체에 적용됩니다)' : ''}`)) return;
+  const ops = {}; keys.forEach(k => ops[k] = null);
+  await commitOps(ops); openLog();
 };
 function exportXlsx(){
   const { items, before, after } = logData();
   const w = XLSX.utils.book_new();
-  const sh1 = [['거래처코드', '시퀀스', '거래처명', '사업자번호', '주소', '원 사무소', '원 담당 사번', '원 담당', '새 사무소', '새 담당 사번', '새 담당', D.month + ' 최종실적', '이관일']]
-    .concat(items.map(a => [a.code, a.seq, a.name, a.biz, a.addr, REP[a.rep0].office, REP[a.rep0].id, REP[a.rep0].name, REP[a.rep].office, REP[a.rep].id, REP[a.rep].name, a.perf[0], XF[a.key].at]));
+  const sh1 = [['거래처코드', '시퀀스', '거래처명', '사업자번호', '주소', '원 사무소', '원 담당 사번', '원 담당', '새 사무소', '새 담당 사번', '새 담당', D.month + ' 최종실적', '이관일', '작업자']]
+    .concat(items.map(a => [a.code, a.seq, a.name, a.biz, a.addr, REP[a.rep0].office, REP[a.rep0].id, REP[a.rep0].name, REP[a.rep].office, REP[a.rep].id, REP[a.rep].name, a.perf[0], XF[a.key].at, XF[a.key].by || '']));
   const z = { n: 0, v: 0 };
   const sh2 = [['사업부', '사무소', '사번', '담당자', '변경 전 거래처수', '변경 전 실적', '변경 후 거래처수', '변경 후 실적', '실적 증감']]
     .concat(REPS.slice().sort((a, b) => ko(a.office, b.office) || ko(a.name, b.name)).map(r => { const b = before[r.id] || z, f = after[r.id] || z; return [r.div, r.office, r.id, r.name, b.n, Math.round(b.v), f.n, Math.round(f.v), Math.round(f.v - b.v)]; }));
@@ -1051,13 +1131,21 @@ function exportXlsx(){
 $('logExport').onclick = $('btnExport').onclick = exportXlsx;
 
 /* ---------- 설정 ---------- */
-function openSet(msg){ $('keyIn').value = getKey() || ''; $('keyErr').textContent = msg || ''; $('mKey').classList.add('show'); }
+function openSet(msg){
+  $('keyIn').value = getKey() || ''; $('pwIn').value = cred().pw; $('nameIn').value = cred().name;
+  $('keyErr').textContent = msg || ''; $('mKey').classList.add('show');
+}
 $('btnSet').onclick = () => openSet();
 $('keyCancel').onclick = () => $('mKey').classList.remove('show');
 $('keySave').onclick = () => {
+  LS.set('teamName', $('nameIn').value.trim().slice(0, 20)); LS.set('teamPw', $('pwIn').value);
   const k = $('keyIn').value.trim();
-  if (!/^[0-9a-f]{32}$/i.test(k)){ $('keyErr').textContent = 'JavaScript 키는 32자리 영문·숫자입니다.'; return; }
-  LS.set('kakaoKey', k); location.reload();
+  if (k && k !== getKey()){
+    if (!/^[0-9a-f]{32}$/i.test(k)){ $('keyErr').textContent = 'JavaScript 키는 32자리 영문·숫자입니다.'; return; }
+    LS.set('kakaoKey', k); location.reload(); return;
+  }
+  if (!getKey()){ $('keyErr').textContent = '카카오 JavaScript 키를 넣어 주세요.'; return; }
+  $('mKey').classList.remove('show'); toast('저장했습니다');
 };
 $('geoOut').onclick = () => {
   const blob = new Blob([JSON.stringify(geoCache)], { type: 'application/json' });
