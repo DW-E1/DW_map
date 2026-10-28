@@ -350,6 +350,14 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="foot"><button class="btn" id="pwClear">저장된 비밀번호 지우기</button><span class="spacer"></span><button class="btn" id="keyCancel">닫기</button><button class="btn primary" id="keySave">저장</button></div>
 </div></div>
 
+<div class="modal" id="mDel"><div class="box">
+  <h2 id="delTitle">인원 삭제</h2>
+  <p id="delInfo"></p>
+  <div class="row" id="delToRow"><label>거래처 넘길 사람</label><select class="sel" id="delTo" style="flex:1"></select></div>
+  <div class="err" id="delErr"></div>
+  <div class="foot"><button class="btn" id="delCancel">취소</button><button class="btn primary" id="delOk" style="background:linear-gradient(135deg,#ff6b6b,#e04848)">삭제</button></div>
+</div></div>
+
 <div class="modal" id="mRep"><div class="box">
   <h2>인원 추가</h2>
   <p>8월 데이터 이후 새로 온 담당자를 추가합니다. 추가한 인원에게 거래처를 이관할 수 있고, 팀 전체에 반영됩니다.</p>
@@ -365,6 +373,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
   <p>이 브라우저에 저장됩니다. 엑셀로 저장해 공유하세요.</p>
   <h3 style="font-size:13px;margin:6px 0">담당자별 변화</h3>
   <div class="tw" id="logSum"></div>
+  <div id="logRemovedWrap"><h3 style="font-size:13px;margin:6px 0">삭제한 인원</h3><div class="tw" id="logRemoved"></div></div>
   <h3 style="font-size:13px;margin:6px 0">이관된 거래처</h3>
   <div class="tw" id="logList"></div>
   <div class="foot">
@@ -470,7 +479,7 @@ function fillHier(){
   const offs = uniq(REPS.filter(r => !S.div || r.div === S.div).map(r => r.office)).sort(ko);
   if (S.office && !offs.includes(S.office)) S.office = '';
   $('fOffice').innerHTML = `<option value="">전체 사무소</option>` + offs.map(o => `<option ${o === S.office ? 'selected' : ''}>${esc(o)}</option>`).join('');
-  const reps = REPS.filter(r => (!S.div || r.div === S.div) && (!S.office || r.office === S.office));
+  const reps = REPS.filter(r => !r.removed && (!S.div || r.div === S.div) && (!S.office || r.office === S.office));
   if (S.rep && !reps.find(r => r.id === S.rep)) S.rep = '';
   const byO = {}; reps.forEach(r => (byO[r.office] = byO[r.office] || []).push(r));
   $('fRep').innerHTML = `<option value="">전체 담당자</option>` + Object.keys(byO).sort(ko).map(o =>
@@ -506,7 +515,7 @@ function mapNotice(msg){
   $('prog').classList.add('show'); $('prog').style.maxWidth = '440px'; $('prog').style.lineHeight = '1.6';
 }
 async function init(){
-  syncReps(LS.get(LSK + 'reps', {})); saveXF(); fillHier();
+  syncReps(LS.get(LSK + 'reps', {})); syncRemoved(REMOVED); saveXF(); fillHier();
   setSync('busy', '공유 저장소 확인 중');
   const [shared] = await Promise.all([pullShared(true), pullGeo()]);
   const key = getKey();
@@ -878,8 +887,7 @@ function showGroup(type, key){
       ${r && r.extra ? `
       <div class="sub">이관받은 거래처 기준 (${D.month} 실적)</div>
       <div class="big">${won(t.fin)}원</div>
-      ${growthCard(t.base, t.fin, t.base > 0 ? (t.fin >= t.base ? 'up' : 'down') : 'none', null)}
-      <div class="links" style="padding:12px 0 0"><button id="dRepDel" style="color:var(--danger)">이 인원 삭제</button></div>` : `
+      ${growthCard(t.base, t.fin, t.base > 0 ? (t.fin >= t.base ? 'up' : 'down') : 'none', null)}` : `
       <div class="sub">${D.month} 최종실적 (50% 기준점 적용 · 담당자별 시트)</div>
       <div class="big">${won(t.fin0)}원</div>
       ${growthCard(t.base0, t.fin0, t.base0 > 0 ? (t.fin0 >= t.base0 ? 'up' : 'down') : 'none', null)}`}
@@ -890,15 +898,12 @@ function showGroup(type, key){
       ${losers.length ? `<h4>기준점 대비 많이 빠진 거래처</h4><div class="gl">${losers.map(row).join('')}</div>` : ''}
       ${winners.length ? `<h4>많이 성장한 거래처</h4><div class="gl">${winners.map(row).join('')}</div>` : ''}
       <div class="gsub" style="margin-top:12px">거래처별 합계는 회전 변경·직거래·웰체크 등이 빠져 있어 공식 수치와 다를 수 있습니다.</div>
-    </div>`;
+    </div>
+    ${type === 'rep' ? `<div class="links"><button id="dRepDel" style="color:var(--danger)">이 인원 삭제</button></div>` : ''}`;
   $('detail').classList.add('show');
   if (innerWidth <= 760){ $('side').classList.remove('open'); document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'map')); }
   $('dClose').onclick = closeDetail;
-  if ($('dRepDel')) $('dRepDel').onclick = async () => {
-    if (accs.length){ toast(`${r.name}님에게 이관된 거래처 ${accs.length}곳을 먼저 되돌리거나 다른 사람에게 옮겨 주세요`); return; }
-    if (!confirm(`${r.name}님을 인원 목록에서 삭제할까요?`)) return;
-    if (await commitOps({}, { [r.id]: null })){ closeDetail(); if (S.rep === r.id){ S.rep = ''; fillHier(); } refresh(false); toast('삭제했습니다'); }
-  };
+  if ($('dRepDel')) $('dRepDel').onclick = () => openDelRep(r.id);
   $('detail').querySelectorAll('.glr').forEach(el => el.onclick = () => select(el.dataset.k, true));
   $('detail').querySelectorAll('.gc').forEach(el => el.onclick = () => {
     if (type === 'rep'){ S.office = r.office; S.rep = key; } else { S.office = key; S.rep = ''; }
@@ -944,7 +949,7 @@ function renderXbar(){
   const from = uniq(sel.map(a => REP[a.rep].name));
   $('xInfo').innerHTML = `<b>${n}곳</b> · ${man(sel.reduce((s, a) => s + a.perf[0], 0))} <span class="sub">(${esc(from.slice(0, 3).join(', '))}${from.length > 3 ? ' 외' : ''})</span> →`;
   const cur = $('xTo').value;
-  const byO = {}; REPS.forEach(r => (byO[r.office] = byO[r.office] || []).push(r));
+  const byO = {}; REPS.filter(r => !r.removed).forEach(r => (byO[r.office] = byO[r.office] || []).push(r));
   const pref = S.office || (sel[0] && REP[sel[0].rep].office);
   const order = Object.keys(byO).sort((x, y) => (y === pref) - (x === pref) || ko(x, y));
   $('xTo').innerHTML = `<option value="">받을 담당자 선택</option>` + order.map(o => `<optgroup label="${esc(o)}">` +
@@ -983,6 +988,54 @@ $('repSave').onclick = async () => {
   if (repForXfer && S.picked.size){ renderXbar(); $('xTo').value = id; }
 };
 $('btnAddRep').onclick = () => openAddRep(false);
+
+/* ---------- 인원 삭제 ---------- */
+let delId = null;
+function openDelRep(id){
+  const r = REP[id]; if (!r) return;
+  delId = id;
+  const accs = ACC.filter(a => a.rep === id);
+  const sum = accs.reduce((s, a) => s + a.perf[0], 0);
+  $('delTitle').textContent = `${r.name}님 삭제`;
+  $('delInfo').innerHTML = accs.length
+    ? `${esc(r.office)} · 담당 거래처 <b>${accs.length}곳</b> (8월 실적 ${man(sum)})이 있습니다. 삭제하려면 거래처를 넘길 사람을 골라 주세요. 거래처는 한 번에 모두 넘어갑니다.`
+    : `${esc(r.office)} · 담당 거래처가 없습니다. 목록에서 삭제합니다.`;
+  $('delToRow').style.display = accs.length ? '' : 'none';
+  const byO = {}; REPS.filter(x => !x.removed && x.id !== id).forEach(x => (byO[x.office] = byO[x.office] || []).push(x));
+  const order = Object.keys(byO).sort((x, y) => (y === r.office) - (x === r.office) || ko(x, y));
+  $('delTo').innerHTML = `<option value="">넘길 사람 선택</option>` + order.map(o => `<optgroup label="${esc(o)}">` +
+    byO[o].sort((a, b) => ko(a.name, b.name)).map(x => `<option value="${x.id}">${esc(x.name)}${x.extra ? ' (추가)' : ''}</option>`).join('') + '</optgroup>').join('');
+  $('delErr').textContent = r.extra ? '' : '기존 인원은 목록에서 숨겨지며, 이관 내역 화면에서 다시 복구할 수 있습니다.';
+  $('delErr').style.color = 'var(--sub)';
+  $('mDel').classList.add('show');
+}
+$('delCancel').onclick = () => $('mDel').classList.remove('show');
+$('delOk').onclick = async () => {
+  const id = delId, r = REP[id]; if (!r) return;
+  const accs = ACC.filter(a => a.rep === id), to = $('delTo').value;
+  if (accs.length && !to){ $('delErr').style.color = 'var(--danger)'; $('delErr').textContent = '거래처를 넘길 사람을 골라 주세요.'; return; }
+  const today = new Date().toISOString().slice(0, 10), ops = {};
+  accs.forEach(a => ops[a.key] = to === a.rep0 ? null : { to, at: today });
+  $('delOk').disabled = true;
+  const ok = await commitOps(ops, { [id]: null });
+  $('delOk').disabled = false;
+  if (!ok) return;
+  $('mDel').classList.remove('show'); closeDetail();
+  if (S.rep === id){ S.rep = ''; }
+  fillHier(); refresh(false);
+  toast(accs.length ? `${r.name}님을 삭제하고 거래처 ${accs.length}곳을 ${REP[to].name}님에게 넘겼습니다` : `${r.name}님을 삭제했습니다`);
+};
+function renderRemoved(){
+  const list = REPS.filter(r => r.removed);
+  $('logRemovedWrap').style.display = list.length ? '' : 'none';
+  $('logRemoved').innerHTML = `<table class="t"><tr><th>사무소</th><th>이름</th><th>삭제일</th><th></th></tr>` +
+    list.map(r => `<tr><td>${esc(r.office)}</td><td>${esc(r.name)}</td><td>${esc((REMOVED[r.id] || {}).at || '')}</td><td><button class="btn sm" data-restore="${esc(r.id)}">복구</button></td></tr>`).join('') + '</table>';
+}
+$('logRemoved').onclick = async e => {
+  const id = e.target.dataset.restore; if (!id) return;
+  e.target.disabled = true;
+  if (await commitOps({}, { [id]: { restore: true } })){ fillHier(); refresh(false); openLog(); toast(`${REP[id].name}님을 복구했습니다. 거래처는 자동으로 돌아오지 않으니 필요하면 다시 이관해 주세요`); }
+};
 let lastUndo = null;
 $('xGo').onclick = async () => {
   const to = $('xTo').value;
@@ -1035,6 +1088,11 @@ function setSync(state, tip){
 }
 /* 추가 인원: 공유 저장소(xfer.json의 reps) 또는 이 브라우저 */
 let EXTRA = LS.get(LSK + 'reps', {});
+let REMOVED = LS.get(LSK + 'removed', {});
+function syncRemoved(rm){
+  REMOVED = rm || {}; LS.set(LSK + 'removed', REMOVED);
+  REPS.forEach(r => r.removed = !!REMOVED[r.id]);
+}
 function syncReps(extra){
   EXTRA = extra || {};
   for (let i = REPS.length - 1; i >= 0; i--) if (REPS[i].extra){ delete REP[REPS[i].id]; REPS.splice(i, 1); }
@@ -1054,7 +1112,7 @@ async function pullShared(silent){
     const j = await api('GET', null, '?file=xfer');
     SHARE.on = true; SHARE.last = Date.now();
     const d = j.data || {};
-    syncReps(d.reps || {}); LS.set(LSK + 'reps', EXTRA);
+    syncReps(d.reps || {}); LS.set(LSK + 'reps', EXTRA); syncRemoved(d.removed || {});
     XF = d.items || {}; SHARE.log = d.log || [];
     saveXF(); fillHier(); setSync('on');
     return true;
@@ -1080,8 +1138,15 @@ async function commitOps(ops, reps){
   ops = ops || {}; reps = reps || {};
   if (!SHARE.on){
     for (const k in ops){ if (ops[k]) XF[k] = ops[k]; else delete XF[k]; }
-    const ex = { ...EXTRA }; for (const id in reps){ if (reps[id]) ex[id] = { ...reps[id], at: new Date().toISOString().slice(0, 10) }; else delete ex[id]; }
-    syncReps(ex); LS.set(LSK + 'reps', EXTRA); saveXF(); fillHier(); refresh(false);
+    const ex = { ...EXTRA }, rm = { ...REMOVED }, today = new Date().toISOString().slice(0, 10);
+    for (const id in reps){
+      const v = reps[id];
+      if (v && v.restore) delete rm[id];
+      else if (v) ex[id] = { ...v, at: today };
+      else if (ex[id]) delete ex[id];
+      else rm[id] = { at: today };
+    }
+    syncReps(ex); LS.set(LSK + 'reps', EXTRA); syncRemoved(rm); saveXF(); fillHier(); refresh(false);
     return true;
   }
   if (!cred().pw && !(await needPw('이관과 인원 추가는 팀 전체에 반영됩니다. 팀 비밀번호를 넣어 주세요.'))) return false;
@@ -1089,7 +1154,7 @@ async function commitOps(ops, reps){
   try{
     const j = await api('POST', { file: 'xfer', ops, reps, password: cred().pw });
     const d = j.data || {};
-    syncReps(d.reps || {}); LS.set(LSK + 'reps', EXTRA);
+    syncReps(d.reps || {}); LS.set(LSK + 'reps', EXTRA); syncRemoved(d.removed || {});
     XF = d.items || {}; SHARE.log = d.log || []; SHARE.last = Date.now();
     saveXF(); fillHier(); refresh(false); setSync('on');
     return true;
@@ -1166,6 +1231,7 @@ function logData(){
   return { items, before, after, touched };
 }
 function openLog(){
+  renderRemoved();
   const { items, before, after, touched } = logData();
   const z = { n: 0, v: 0 };
   $('logSum').innerHTML = touched.length ? `<table class="t"><tr><th>사무소</th><th>담당자</th><th class="n">거래처 전→후</th><th class="n">실적 전</th><th class="n">실적 후</th><th class="n">증감</th></tr>` +
@@ -1193,11 +1259,11 @@ function exportXlsx(){
     .concat(items.map(a => [a.code, a.seq, a.name, a.biz, a.addr, REP[a.rep0].office, REP[a.rep0].id, REP[a.rep0].name, REP[a.rep].office, REP[a.rep].id, REP[a.rep].name, a.perf[0], XF[a.key].at]));
   const z = { n: 0, v: 0 };
   const sh2 = [['사업부', '사무소', '사번', '담당자', '변경 전 거래처수', '변경 전 실적', '변경 후 거래처수', '변경 후 실적', '실적 증감']]
-    .concat(REPS.slice().sort((a, b) => ko(a.office, b.office) || ko(a.name, b.name)).map(r => { const b = before[r.id] || z, f = after[r.id] || z; return [r.div, r.office, r.id, r.name, b.n, Math.round(b.v), f.n, Math.round(f.v), Math.round(f.v - b.v)]; }));
+    .concat(REPS.filter(r => !r.removed).sort((a, b) => ko(a.office, b.office) || ko(a.name, b.name)).map(r => { const b = before[r.id] || z, f = after[r.id] || z; return [r.div, r.office, r.id, r.name, b.n, Math.round(b.v), f.n, Math.round(f.v), Math.round(f.v - b.v)]; }));
   const sh3 = [['사업부', '사무소', '사번', '담당자', '거래처코드', '시퀀스', '시퀀스명', '거래처명', '사업자번호', '주소', '위도', '경도', '제약 기준점', '기준점 대비 성장금액', '성장률', '구분', ...D.perfCols, '이관 여부', '원 담당']]
     .concat(ACC.map(a => { const r = REP[a.rep], p = pct(gdiff(a), a.base || 0); return [r.div, r.office, r.id, r.name, a.code, a.seq, a.seqName, a.name, a.biz, a.addr, a.lat ?? '', a.lng ?? '', a.base ?? '', gdiff(a), p == null ? '' : Math.round(p * 10) / 1000, GS[gstat(a)].label, ...a.perf, a.rep !== a.rep0 ? 'Y' : '', a.rep !== a.rep0 ? REP[a.rep0].name : '']; }));
   const sh4 = [['사업부', '사무소', '사번', '담당자', '기준점', '최종실적', '성장금액', '성장률', '이관 반영 기준점', '이관 반영 실적', '이관 반영 성장금액']]
-    .concat(REPS.slice().sort((a, b) => ko(a.office, b.office) || ko(a.name, b.name)).map(r => { const g = repGrowth(r.id); return [r.div, r.office, r.id, r.name, g.base0, g.fin0, g.fin0 - g.base0, g.base0 ? Math.round((g.fin0 - g.base0) / g.base0 * 1000) / 1000 : '', g.base, g.fin, g.diff]; }));
+    .concat(REPS.filter(r => !r.removed).sort((a, b) => ko(a.office, b.office) || ko(a.name, b.name)).map(r => { const g = repGrowth(r.id); return [r.div, r.office, r.id, r.name, g.base0, g.fin0, g.fin0 - g.base0, g.base0 ? Math.round((g.fin0 - g.base0) / g.base0 * 1000) / 1000 : '', g.base, g.fin, g.diff]; }));
   XLSX.utils.book_append_sheet(w, XLSX.utils.aoa_to_sheet(sh1), '이관내역');
   XLSX.utils.book_append_sheet(w, XLSX.utils.aoa_to_sheet(sh2), '담당자별요약');
   XLSX.utils.book_append_sheet(w, XLSX.utils.aoa_to_sheet(sh3), '전체배정');
